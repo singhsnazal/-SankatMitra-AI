@@ -5,5 +5,5 @@ chromadb
 langchain
 langchain-community
 langchain-groq
-ollama
+sentence-transformers
 python-dotenv
