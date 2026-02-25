@@ -1,110 +1,79 @@
 const chat = document.getElementById("chat");
-const query = document.getElementById("query");
 const sendBtn = document.getElementById("sendBtn");
 const clearBtn = document.getElementById("clearBtn");
+const uploadBtn = document.getElementById("uploadBtn");
+const imageInput = document.getElementById("imageInput");
 
-// 🔥 Define bot name once (easy future change)
-const BOT_NAME = "SankatMitra AI";
+let selectedImage = null;
 
-// Professional welcome message
-const WELCOME_MESSAGE =
-  "Hi 👋 I’m SankatMitra AI — your AI-powered disaster preparedness and emergency response assistant. How can I assist you today?";
+// ==========================
+// Upload Image
+// ==========================
+uploadBtn.addEventListener("click", () => {
+  imageInput.click();
+});
 
-function timeNow() {
-  const d = new Date();
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+imageInput.addEventListener("change", () => {
+  selectedImage = imageInput.files[0];
 
-function bubble(text, who = "ai", sources = null) {
-  const wrap = document.createElement("div");
-  wrap.className = `bubble ${who}`;
-
-  wrap.innerHTML = `
-    <div>${escapeHtml(text)}</div>
-    <div class="meta">${who === "user" ? "You" : BOT_NAME} • ${timeNow()}</div>
-  `;
-
-  if (sources && sources.length) {
-    const s = document.createElement("div");
-    s.className = "sources";
-    s.innerHTML = `
-      <b>📌 Sources</b>
-      <ul>${sources.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>
-    `;
-    wrap.appendChild(s);
+  if (selectedImage) {
+    addMessage("📷 Image selected: " + selectedImage.name, "user");
   }
+});
 
-  chat.appendChild(wrap);
-  chat.scrollTop = chat.scrollHeight;
-}
+// ==========================
+// Send Message
+// ==========================
+sendBtn.addEventListener("click", async () => {
+  const query = document.getElementById("query").value.trim();
 
-function typingIndicator() {
-  const t = document.createElement("div");
-  t.className = "typing";
-  t.id = "typing";
-  t.innerHTML = `
-    <div class="dot"></div>
-    <div class="dot"></div>
-    <div class="dot"></div>
-  `;
-  chat.appendChild(t);
-  chat.scrollTop = chat.scrollHeight;
-}
+  if (!query && !selectedImage) return;
 
-function removeTyping() {
-  const t = document.getElementById("typing");
-  if (t) t.remove();
-}
+  if (query) addMessage(query, "user");
 
-function escapeHtml(str) {
-  return str.replace(/[&<>"']/g, m => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  }[m]));
-}
+  const formData = new FormData();
 
-async function askApi(question) {
-  const res = await fetch(`/ask?q=${encodeURIComponent(question)}`);
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`API Error ${res.status}: ${txt}`);
-  }
-  return await res.json();
-}
-
-async function send() {
-  const q = query.value.trim();
-  if (!q) return;
-
-  bubble(q, "user");
-  query.value = "";
-  query.focus();
-
-  typingIndicator();
+  if (query) formData.append("question", query);
+  if (selectedImage) formData.append("image", selectedImage);
 
   try {
-    const data = await askApi(q);
-    removeTyping();
-    bubble(data.answer || "No answer found.", "ai", data.sources || []);
-  } catch (err) {
-    removeTyping();
-    bubble("❌ " + err.message, "ai");
+    const response = await fetch("/query", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await response.json();
+
+    if (data.answer) {
+      addMessage(data.answer, "bot");
+    } else if (data.error) {
+      addMessage("Error: " + data.error, "bot");
+    }
+
+  } catch (error) {
+    addMessage("Server error. Please try again.", "bot");
   }
-}
 
-sendBtn.addEventListener("click", send);
-
-query.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") send();
+  // Reset inputs
+  document.getElementById("query").value = "";
+  imageInput.value = "";
+  selectedImage = null;
 });
 
+// ==========================
+// Clear Chat
+// ==========================
 clearBtn.addEventListener("click", () => {
   chat.innerHTML = "";
-  bubble(WELCOME_MESSAGE, "ai");
 });
 
-// 🔥 Show welcome message on page load
-bubble(WELCOME_MESSAGE, "ai");
+// ==========================
+// Add Message Bubble
+// ==========================
+function addMessage(text, sender) {
+  const msg = document.createElement("div");
+  msg.className = "message " + sender;
+  msg.innerText = text;
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+}

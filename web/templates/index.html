@@ -12,9 +12,7 @@
   <div class="app">
     <header class="header">
       <div class="brand">
-        <!-- LOGO IMAGE -->
-        <img src="/static/logo.png" alt="AapdaAssist AI Logo" class="logo" />
-
+        <img src="/static/logo.png" alt="SankatMitra AI Logo" class="logo" />
         <div>
           <div class="title">SankatMitra AI</div>
           <div class="subtitle">
@@ -22,7 +20,6 @@
           </div>
         </div>
       </div>
-
       <button id="clearBtn" class="btn ghost">Clear</button>
     </header>
 
@@ -30,6 +27,13 @@
 
     <footer class="composer">
       <input id="query" type="text" placeholder="Ask something from your documents..." />
+
+      <!-- Hidden image input -->
+      <input id="imageInput" type="file" accept="image/*" style="display:none;" />
+
+      <!-- Upload button -->
+      <button id="uploadBtn" class="btn ghost">📷</button>
+
       <button id="sendBtn" class="btn primary">Send</button>
     </footer>
   </div>

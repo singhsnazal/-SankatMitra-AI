@@ -1,19 +1,57 @@
 from pathlib import Path
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import (
+    PyPDFLoader,
+    TextLoader,
+    CSVLoader,
+    UnstructuredWordDocumentLoader
+)
 
 def load_documents(folder_path: str):
     """
-    Loads all PDFs from the raw_docs folder and returns LangChain Documents.
-    Adds metadata (source filename).
+    Loads documents (PDF, TXT, DOCX, CSV) from a folder.
+    Adds metadata including source filename and file type.
+    Returns LangChain Documents.
     """
+
     docs = []
-    for pdf_path in Path(folder_path).glob("*.pdf"):
-        loader = PyPDFLoader(str(pdf_path))
-        loaded = loader.load()
+    folder = Path(folder_path)
 
-        for d in loaded:
-            d.metadata["source"] = pdf_path.name  # store filename
+    for file_path in folder.glob("*"):
 
-        docs.extend(loaded)
+        suffix = file_path.suffix.lower()
+
+        try:
+            # ------------------ PDF ------------------
+            if suffix == ".pdf":
+                loader = PyPDFLoader(str(file_path))
+                loaded = loader.load()
+
+            # ------------------ TXT ------------------
+            elif suffix == ".txt":
+                loader = TextLoader(str(file_path), encoding="utf-8")
+                loaded = loader.load()
+
+            # ------------------ DOCX ------------------
+            elif suffix == ".docx":
+                loader = UnstructuredWordDocumentLoader(str(file_path))
+                loaded = loader.load()
+
+            # ------------------ CSV ------------------
+            elif suffix == ".csv":
+                loader = CSVLoader(str(file_path))
+                loaded = loader.load()
+
+            else:
+                continue  # skip unsupported files
+
+            # Add metadata
+            for d in loaded:
+                d.metadata["source"] = file_path.name
+                d.metadata["file_type"] = suffix
+
+            docs.extend(loaded)
+
+        except Exception as e:
+            print(f"⚠️ Failed to load {file_path.name}: {e}")
 
     return docs
