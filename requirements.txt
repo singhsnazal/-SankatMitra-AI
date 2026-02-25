@@ -7,4 +7,3 @@ langchain-community
 langchain-groq
 python-dotenv
 sentence-transformers
-torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
