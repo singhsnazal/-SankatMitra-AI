@@ -5,6 +5,7 @@ from pathlib import Path
 from rag.chain import answer_question
 
 from transformers import BlipProcessor, BlipForConditionalGeneration
+from faster_whisper import WhisperModel
 from PIL import Image
 import torch
 import shutil
@@ -22,17 +23,24 @@ STATIC_DIR = BASE_DIR / "web" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # ===============================
-# Load Image Caption Model (CPU Safe)
+# Load Image Caption Model
 # ===============================
 device = "cpu"
 
 processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-model = BlipForConditionalGeneration.from_pretrained(
+image_model = BlipForConditionalGeneration.from_pretrained(
     "Salesforce/blip-image-captioning-base"
 ).to(device)
 
-model.eval()
+image_model.eval()
 
+# ===============================
+# Load Whisper Model (Audio)
+# ===============================
+whisper_model = WhisperModel(
+    "small",              # small = good balance
+    compute_type="int8"   # optimized for CPU
+)
 
 # ===============================
 # Convert Image → Caption
@@ -43,7 +51,7 @@ def image_to_text(image_path: str) -> str:
         inputs = processor(image, return_tensors="pt").to(device)
 
         with torch.no_grad():
-            output = model.generate(**inputs, max_new_tokens=25)
+            output = image_model.generate(**inputs, max_new_tokens=25)
 
         caption = processor.decode(output[0], skip_special_tokens=True)
         return caption
@@ -51,6 +59,22 @@ def image_to_text(image_path: str) -> str:
     except Exception as e:
         print("Image processing error:", e)
         return "Unable to understand the image."
+
+
+# ===============================
+# Convert Audio → Text
+# ===============================
+def audio_to_text(audio_path: str) -> str:
+    try:
+        segments, _ = whisper_model.transcribe(
+            audio_path,
+            language="en"
+        )
+        text = " ".join([seg.text for seg in segments])
+        return text.strip()
+    except Exception as e:
+        print("Audio processing error:", e)
+        return "Unable to understand the audio."
 
 
 # ===============================
@@ -71,18 +95,17 @@ def ask(q: str):
 
 
 # ===============================
-# Unified Image + Text endpoint
+# Unified Text + Image + Audio
 # ===============================
 @app.post("/query")
 async def query(
     question: str = Form(None),
-    image: UploadFile = File(None)
+    image: UploadFile = File(None),
+    audio: UploadFile = File(None)
 ):
 
     # -------- IMAGE FLOW --------
     if image is not None:
-
-        # Basic file validation
         if not image.content_type.startswith("image/"):
             return {"error": "Uploaded file is not an image."}
 
@@ -93,8 +116,6 @@ async def query(
 
         try:
             caption = image_to_text(temp_path)
-
-            # Optional disaster hint extraction
             disaster_hint = detect_disaster_type(caption)
 
             structured_query = f"""
@@ -107,7 +128,6 @@ Disaster hint: {disaster_hint}
 
 Provide response strictly according to official disaster management norms.
 """
-
             result = answer_question(structured_query)
 
         finally:
@@ -115,6 +135,28 @@ Provide response strictly according to official disaster management norms.
                 os.remove(temp_path)
 
         return format_response(result)
+
+    # -------- AUDIO FLOW --------
+    elif audio is not None:
+        if not audio.content_type.startswith("audio/"):
+            return {"error": "Uploaded file is not audio."}
+
+        temp_path = f"temp_{audio.filename}"
+
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(audio.file, buffer)
+
+        try:
+            transcribed_text = audio_to_text(temp_path)
+            result = answer_question(transcribed_text)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+        return {
+            "transcribed_text": transcribed_text,
+            **format_response(result)
+        }
 
     # -------- TEXT FLOW --------
     elif question is not None:
